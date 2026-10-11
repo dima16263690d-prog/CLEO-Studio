@@ -100,6 +100,17 @@ MainWindow::MainWindow(QWidget* parent)
     closeAction->setShortcut(QKeySequence::Close);
     connect(closeAction, &QAction::triggered, this, [this] { closeDocument(tabs_->currentIndex()); });
     fileMenu->addSeparator();
+    auto* convertToUtf8Action = fileMenu->addAction(tr("Кодировка: преобразовать в UTF-8 без BOM"));
+    connect(convertToUtf8Action, &QAction::triggered, this, [this] {
+        if (auto* editor = currentEditor()) {
+            editor->setEncodingName(QStringLiteral("UTF-8"));
+            editor->setByteOrderMark(false);
+            editor->document()->setModified(true);
+            updateTabTitle(editor);
+            updateCursorStatus();
+            appendOutput(tr("Выбран UTF-8 без BOM. Сохраните файл, чтобы применить преобразование."));
+        }
+    });
     auto* exitAction = fileMenu->addAction(tr("Выход"));
     connect(exitAction, &QAction::triggered, this, [this] { close(); });
 
