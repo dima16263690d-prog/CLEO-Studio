@@ -10,6 +10,7 @@ The goal is a modern, testable alternative built around a modular language engin
 
 - Windows x64 desktop application built with C++20 and Qt 6 Widgets.
 - Multiple source tabs, open/save/save-as, unsaved-change prompts, and atomic writes.
+- Encoding-aware source I/O for UTF-8/UTF-16 BOM files, explicit legacy-code-page selection for invalid UTF-8, preservation of the detected newline style, and a deliberate conversion-to-UTF-8 action.
 - Line numbers, current-line highlight, and syntax highlighting for common Sanny/CLEO constructs.
 - Lexer diagnostics for unterminated string literals/directives and unrecognized characters.
 - Preliminary label analysis: duplicate labels are errors; unresolved `@label` references are warnings because labels may be external.
