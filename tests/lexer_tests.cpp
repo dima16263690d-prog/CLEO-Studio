@@ -41,14 +41,14 @@ int main() {
           && badDirective.diagnostics.front().code == "LEX002", "reports unterminated directive");
     check(lex("0x wait 0").hasErrors(), "reports a hex prefix without digits");
 
-    const auto ini = parseOpcodeCatalog(
-        "; test opcode catalog\\n"
-        "VERSION=1.2\\n"
-        "PUBLISHER=unit tests\\n"
-        "DATE=2026-01-01\\n"
-        "0001=1, wait %1d% ms\\n"
-        "00BF=2, $hours $minutes\\n"
-        "0001=1, wait %1d% milliseconds\\n");
+    const auto ini = parseOpcodeCatalog(R"INI(; test opcode catalog
+VERSION=1.2
+PUBLISHER=unit tests
+DATE=2026-01-01
+0001=1, wait %1d% ms
+00BF=2, $hours $minutes
+0001=1, wait %1d% milliseconds
+)INI");
     check(!ini.hasErrors(), "valid SCM.INI entries should parse");
     check(ini.opcodes.size() == 2, "opcode catalogue has unique IDs");
     check(ini.version == "1.2" && ini.publisher == "unit tests", "catalogue metadata is read");
@@ -58,7 +58,9 @@ int main() {
     check(!ini.diagnostics.empty() && ini.diagnostics.back().code == "OPC006",
           "duplicate opcode emits a warning");
 
-    const auto brokenIni = parseOpcodeCatalog("0001=one, malformed\\n12345=1, bad-id");
+    const auto brokenIni = parseOpcodeCatalog(R"INI(0001=one, malformed
+ZZZZ=1, bad-id
+)INI");
     check(brokenIni.hasErrors(), "malformed opcode definitions report errors");
 
     const auto resolved = analyze(R"(jump @START
