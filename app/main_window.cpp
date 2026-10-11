@@ -9,6 +9,8 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QInputDialog>
+#include <QStringConverter>
 #include <QHeaderView>
 #include <QLineEdit>
 #include <QKeySequence>
@@ -178,17 +180,97 @@ void MainWindow::openFile() {
     const QString path = QFileDialog::getOpenFileName(this, tr("Открыть скрипт"), QString(),
         tr("Исходники и скрипты (*.sc *.cs *.txt *.scm *.cleo);;Все файлы (*.*)"));
     if (path.isEmpty()) return;
+
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
         QMessageBox::critical(this, tr("Ошибка чтения"),
             tr("Не удалось открыть файл:\n%1").arg(file.errorString()));
         return;
     }
-    const QByteArray bytes = file.readAll();
+
+    QByteArray payload = file.readAll();
+    QString encodingName;
+    QString decodedText;
+    bool hasBom = false;
+    bool decoded = false;
+
+    if (payload.startsWith(QByteArray::fromHex("efbbbf"))) {
+        payload.remove(0, 3);
+        encodingName = QStringLiteral("UTF-8");
+        hasBom = true;
+        QStringDecoder decoder(QStringConverter::Utf8);
+        decodedText = decoder.decode(payload);
+        decoded = !decoder.hasError();
+    } else if (payload.startsWith(QByteArray::fromHex("fffe"))
+               || payload.startsWith(QByteArray::fromHex("feff"))) {
+        const bool littleEndian = payload.startsWith(QByteArray::fromHex("fffe"));
+        payload.remove(0, 2);
+        encodingName = littleEndian ? QStringLiteral("UTF-16LE") : QStringLiteral("UTF-16BE");
+        hasBom = true;
+        const auto codec = QStringConverter::encodingForName(encodingName.toLatin1());
+        if (codec) {
+            QStringDecoder decoder(*codec);
+            decodedText = decoder.decode(payload);
+            decoded = !decoder.hasError();
+        }
+    } else {
+        QStringDecoder decoder(QStringConverter::Utf8);
+        decodedText = decoder.decode(payload);
+        decoded = !decoder.hasError();
+        if (decoded) encodingName = QStringLiteral("UTF-8");
+    }
+
+    if (!decoded && !hasBom) {
+        const QStringList candidates{
+            QStringLiteral("Windows-1251"),
+            QStringLiteral("Windows-1250"),
+            QStringLiteral("Windows-1252"),
+            QStringLiteral("System ANSI")
+        };
+        bool accepted = false;
+        const QString chosen = QInputDialog::getItem(
+            this, tr("Кодировка исходника"),
+            tr("Файл не является корректным UTF-8. Выберите кодировку, чтобы не повредить текст:"),
+            candidates, 0, false, &accepted);
+        if (!accepted) return;
+
+        encodingName = chosen;
+        if (chosen == QStringLiteral("System ANSI")) {
+            decodedText = QString::fromLocal8Bit(payload);
+            decoded = true;
+        } else {
+            const auto codec = QStringConverter::encodingForName(chosen.toLatin1());
+            if (codec) {
+                QStringDecoder decoder(*codec);
+                decodedText = decoder.decode(payload);
+                decoded = !decoder.hasError();
+            }
+        }
+    }
+
+    if (!decoded) {
+        QMessageBox::critical(this, tr("Ошибка декодирования"),
+            tr("Не удалось прочитать файл в выбранной кодировке. Исходный файл не изменён."));
+        return;
+    }
+
+    QString lineEnding = QStringLiteral("\r\n");
+    if (decodedText.contains(QStringLiteral("\r\n"))) {
+        lineEnding = QStringLiteral("\r\n");
+    } else if (decodedText.contains(QLatin1Char('\n'))) {
+        lineEnding = QStringLiteral("\n");
+    } else if (decodedText.contains(QLatin1Char('\r'))) {
+        lineEnding = QStringLiteral("\r");
+    }
+
     auto* editor = new ScriptEditor(tabs_);
     editor->setFilePath(path);
-    editor->setPlainText(QString::fromUtf8(bytes));
+    editor->setEncodingName(encodingName);
+    editor->setByteOrderMark(hasBom);
+    editor->setLineEnding(lineEnding);
+    editor->setPlainText(decodedText);
     editor->document()->setModified(false);
+
     const int index = tabs_->addTab(editor, QString());
     tabs_->setCurrentIndex(index);
     connect(editor->document(), &QTextDocument::modificationChanged, this,
