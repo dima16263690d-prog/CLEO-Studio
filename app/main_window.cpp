@@ -1,5 +1,6 @@
 #include "main_window.hpp"
 #include "cleo_studio/analyzer.hpp"
+#include "cleo_studio/opcode_catalog.hpp"
 #include "script_editor.hpp"
 #include <QAction>
 #include <QCloseEvent>
@@ -7,6 +8,8 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QHeaderView>
+#include <QLineEdit>
 #include <QKeySequence>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -14,13 +17,20 @@
 #include <QSaveFile>
 #include <QStatusBar>
 #include <QTabWidget>
+#include <QTableWidget>
+#include <QTableWidgetItem>
+#include <QVBoxLayout>
+#include <QWidget>
 #include <QTextCursor>
 #include <QTextDocument>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent), tabs_(new QTabWidget(this)),
       outputDock_(new QDockWidget(tr("Результат проверки"), this)),
-      output_(new QPlainTextEdit(outputDock_)) {
+      output_(new QPlainTextEdit(outputDock_)),
+      opcodeDock_(new QDockWidget(tr("Каталог опкодов"), this)),
+      opcodeSearch_(new QLineEdit(opcodeDock_)),
+      opcodeTable_(new QTableWidget(opcodeDock_)) {
     setWindowTitle(tr("CLEO Studio"));
     resize(1180, 780);
     setMinimumSize(760, 520);
@@ -34,6 +44,33 @@ MainWindow::MainWindow(QWidget* parent)
     outputDock_->setWidget(output_);
     addDockWidget(Qt::BottomDockWidgetArea, outputDock_);
     outputDock_->hide();
+
+    opcodeSearch_->setPlaceholderText(tr("Поиск по ID, описанию и числу параметров..."));
+    opcodeTable_->setColumnCount(3);
+    opcodeTable_->setHorizontalHeaderLabels({tr("Опкод"), tr("Параметры"), tr("Описание")});
+    opcodeTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    opcodeTable_->setSelectionMode(QAbstractItemView::SingleSelection);
+    opcodeTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    opcodeTable_->setAlternatingRowColors(true);
+    opcodeTable_->verticalHeader()->setVisible(false);
+    opcodeTable_->horizontalHeader()->setStretchLastSection(true);
+    auto* opcodePanel = new QWidget(opcodeDock_);
+    auto* opcodeLayout = new QVBoxLayout(opcodePanel);
+    opcodeLayout->setContentsMargins(6, 6, 6, 6);
+    opcodeLayout->addWidget(opcodeSearch_);
+    opcodeLayout->addWidget(opcodeTable_);
+    opcodeDock_->setWidget(opcodePanel);
+    addDockWidget(Qt::RightDockWidgetArea, opcodeDock_);
+    opcodeDock_->hide();
+    connect(opcodeSearch_, &QLineEdit::textChanged, this,
+            [this](const QString& filter) { filterOpcodeTable(filter); });
+    connect(opcodeTable_, &QTableWidget::cellDoubleClicked, this,
+            [this](int row, int) {
+                if (!currentEditor() || !opcodeTable_->item(row, 0)) return;
+                const auto id = opcodeTable_->item(row, 0)->data(Qt::UserRole).toUInt();
+                currentEditor()->insertPlainText(QStringLiteral("%1: ").arg(id, 4, 16, QChar('0')).toUpper());
+                currentEditor()->setFocus();
+            });
 
     auto* fileMenu = menuBar()->addMenu(tr("Файл"));
     auto* newAction = fileMenu->addAction(tr("Новый файл"));
@@ -74,6 +111,12 @@ MainWindow::MainWindow(QWidget* parent)
     auto* pasteAction = editMenu->addAction(tr("Вставить"));
     pasteAction->setShortcut(QKeySequence::Paste);
     connect(pasteAction, &QAction::triggered, this, [this] { if (auto* e = currentEditor()) e->paste(); });
+
+    auto* dataMenu = menuBar()->addMenu(tr("Данные"));
+    auto* loadOpcodesAction = dataMenu->addAction(tr("Загрузить базу SCM.INI..."));
+    connect(loadOpcodesAction, &QAction::triggered, this, [this] { loadOpcodeCatalog(); });
+    auto* showOpcodesAction = dataMenu->addAction(tr("Показать каталог опкодов"));
+    connect(showOpcodesAction, &QAction::triggered, this, [this] { opcodeDock_->show(); });
 
     auto* validationMenu = menuBar()->addMenu(tr("Проверка"));
     auto* validateAction = validationMenu->addAction(tr("Проверить структуру исходника"));
@@ -225,6 +268,70 @@ void MainWindow::updateCursorStatus() {
 void MainWindow::appendOutput(const QString& message) {
     output_->appendPlainText(message);
     outputDock_->show();
+}
+
+void MainWindow::loadOpcodeCatalog() {
+    const QString path = QFileDialog::getOpenFileName(
+        this, tr("Загрузить базу опкодов"), QString(),
+        tr("SCM opcode definitions (*.ini);;Все файлы (*.*)"));
+    if (path.isEmpty()) return;
+
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        QMessageBox::critical(this, tr("Ошибка чтения"),
+            tr("Не удалось открыть базу опкодов:\n%1").arg(file.errorString()));
+        return;
+    }
+    const QByteArray bytes = file.readAll();
+    opcodeCatalog_ = cleo_studio::parseOpcodeCatalog(
+        std::string_view(bytes.constData(), static_cast<std::size_t>(bytes.size())));
+
+    opcodeTable_->setRowCount(static_cast<int>(opcodeCatalog_.opcodes.size()));
+    int row = 0;
+    for (const auto& [id, definition] : opcodeCatalog_.opcodes) {
+        const QString idText = QString::number(id, 16).toUpper().rightJustified(4, QLatin1Char('0'));
+        auto* idItem = new QTableWidgetItem(idText);
+        idItem->setData(Qt::UserRole, static_cast<unsigned int>(id));
+        opcodeTable_->setItem(row, 0, idItem);
+        opcodeTable_->setItem(row, 1,
+            new QTableWidgetItem(QString::number(static_cast<qulonglong>(definition.parameterCount))));
+        opcodeTable_->setItem(row, 2,
+            new QTableWidgetItem(QString::fromUtf8(definition.description.data(),
+                static_cast<qsizetype>(definition.description.size()))));
+        ++row;
+    }
+    opcodeSearch_->clear();
+    filterOpcodeTable(QString());
+    opcodeDock_->show();
+
+    appendOutput(tr("База %1: загружено %2 уникальных ID опкодов.")
+        .arg(QFileInfo(path).fileName()).arg(opcodeCatalog_.opcodes.size()));
+    if (!opcodeCatalog_.version.empty()) appendOutput(tr("Версия данных: %1").arg(QString::fromStdString(opcodeCatalog_.version)));
+    if (!opcodeCatalog_.publisher.empty()) appendOutput(tr("Источник/издатель: %1").arg(QString::fromStdString(opcodeCatalog_.publisher)));
+    if (!opcodeCatalog_.date.empty()) appendOutput(tr("Дата данных: %1").arg(QString::fromStdString(opcodeCatalog_.date)));
+    for (const auto& diagnostic : opcodeCatalog_.diagnostics) {
+        const QString severity = diagnostic.severity == cleo_studio::Severity::error
+            ? tr("ошибка") : tr("предупреждение");
+        appendOutput(QString("%1:%2: %3 [%4]: %5")
+            .arg(QFileInfo(path).fileName()).arg(diagnostic.line).arg(severity)
+            .arg(QString::fromStdString(diagnostic.code))
+            .arg(QString::fromStdString(diagnostic.message)));
+    }
+    statusBar()->showMessage(opcodeCatalog_.hasErrors()
+        ? tr("Каталог загружен частично: есть ошибки в определениях.")
+        : tr("Каталог опкодов загружен."), 6000);
+}
+
+void MainWindow::filterOpcodeTable(const QString& filter) {
+    const QString query = filter.trimmed();
+    for (int row = 0; row < opcodeTable_->rowCount(); ++row) {
+        bool match = query.isEmpty();
+        for (int column = 0; !match && column < opcodeTable_->columnCount(); ++column) {
+            const auto* item = opcodeTable_->item(row, column);
+            match = item && item->text().contains(query, Qt::CaseInsensitive);
+        }
+        opcodeTable_->setRowHidden(row, !match);
+    }
 }
 
 void MainWindow::validateCurrent() {

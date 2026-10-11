@@ -1,9 +1,12 @@
 #pragma once
+#include "cleo_studio/opcode_catalog.hpp"
 #include <QMainWindow>
 class QCloseEvent;
 class QDockWidget;
+class QLineEdit;
 class QPlainTextEdit;
 class QTabWidget;
+class QTableWidget;
 class QString;
 class ScriptEditor;
 class MainWindow final : public QMainWindow {
@@ -15,6 +18,10 @@ private:
     QTabWidget* tabs_{nullptr};
     QDockWidget* outputDock_{nullptr};
     QPlainTextEdit* output_{nullptr};
+    QDockWidget* opcodeDock_{nullptr};
+    QLineEdit* opcodeSearch_{nullptr};
+    QTableWidget* opcodeTable_{nullptr};
+    cleo_studio::OpcodeCatalog opcodeCatalog_;
     [[nodiscard]] ScriptEditor* currentEditor() const;
     void newFile();
     void openFile();
@@ -27,4 +34,6 @@ private:
     void updateCursorStatus();
     void validateCurrent();
     void appendOutput(const QString& message);
+    void loadOpcodeCatalog();
+    void filterOpcodeTable(const QString& filter);
 };
