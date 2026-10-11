@@ -199,7 +199,16 @@ void MainWindow::openFile() {
         return;
     }
 
-    QByteArray payload = file.readAll();
+    const QByteArray bytes = file.readAll();
+    const bool hasUtf16Bom = bytes.startsWith(QByteArray::fromHex("fffe"))
+        || bytes.startsWith(QByteArray::fromHex("feff"));
+    if (!hasUtf16Bom && bytes.contains(char(0))) {
+        QMessageBox::warning(this, tr("Бинарный файл"),
+            tr("Этот файл содержит нулевые байты и похож на скомпилированный SCM/CLEO-скрипт. "
+               "Он не открыт как текст, чтобы случайно не повредить бинарные данные."));
+        return;
+    }
+    QByteArray payload = bytes;
     QString encodingName;
     QString decodedText;
     bool hasBom = false;
