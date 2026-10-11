@@ -28,3 +28,30 @@ jobs:
         run: cmake --build build --config Release --parallel
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Package Windows build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dist = Join-Path $PWD 'dist'
+          New-Item -ItemType Directory -Force -Path $dist | Out-Null
+          Copy-Item 'build/Release/cleo-studio.exe' $dist
+          Copy-Item 'build/Release/cleo-studio-cli.exe' $dist
+          Copy-Item 'README.md' $dist
+          $deploy = Join-Path $env:QT_ROOT_DIR 'bin/windeployqt.exe'
+          if (!(Test-Path $deploy)) {
+            throw "windeployqt not found at $deploy"
+          }
+          & $deploy --release --compiler-runtime --dir $dist (Join-Path $dist 'cleo-studio.exe')
+          if ($LASTEXITCODE -ne 0) {
+            throw "windeployqt failed with exit code $LASTEXITCODE"
+          }
+          Compress-Archive -Path (Join-Path $dist '*') -DestinationPath 'CLEO-Studio-Windows-x64.zip' -Force
+
+      - name: Upload downloadable Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: CLEO-Studio-Windows-x64
+          path: CLEO-Studio-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14
