@@ -33,6 +33,9 @@ int main() {
     const auto hex = lex("0A8C: read_memory 0x1234");
     check(!hex.hasErrors(), "opcode-like hex and hex number should work");
     check(countKind(hex, TokenKind::number) == 2, "recognizes opcode id and hex number");
+    const auto lowerHex = lex("0abc: command");
+    check(!lowerHex.hasErrors() && countKind(lowerHex, TokenKind::number) == 1,
+          "opcode IDs with lowercase hex digits should be lexed as a single token");
     const auto badString = lex("show_text \"not closed\nwait 0");
     check(badString.hasErrors() && !badString.diagnostics.empty()
           && badString.diagnostics.front().code == "LEX001", "reports unterminated string");

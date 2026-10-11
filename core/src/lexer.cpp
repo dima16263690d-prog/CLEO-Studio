@@ -91,7 +91,9 @@ LexResult lex(std::string_view source) {
             }
             const bool mayBeOpcodeHex = source[offset] == '0';
             while (offset < source.size() && std::isdigit(static_cast<unsigned char>(source[offset])) != 0) advance();
-            if (mayBeOpcodeHex && offset < source.size() && source[offset] >= 'A' && source[offset] <= 'F') {
+            if (mayBeOpcodeHex && offset < source.size()
+                && std::isalpha(static_cast<unsigned char>(source[offset])) != 0
+                && isHexDigit(static_cast<unsigned char>(source[offset]))) {
                 while (offset < source.size() && isHexDigit(static_cast<unsigned char>(source[offset]))) advance();
             }
             addToken(TokenKind::number, start, startLine, startColumn);
