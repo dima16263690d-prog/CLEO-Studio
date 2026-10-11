@@ -3,7 +3,7 @@
 ## Milestone 0 — editor foundation
 - [x] CMake project, Qt editor tabs, line numbers and syntax highlighting
 - [x] Open/save/save-as, modified-file prompts and atomic writes
-- [x] Shared lexer, CLI, preliminary label analysis and regression tests
+- [x] Shared lexer, CLI, preliminary label analysis, SCM.INI importer and regression tests
 - [x] Windows CI build/test workflow
 - [ ] Verify the first CI run and fix any build/runtime issues
 
