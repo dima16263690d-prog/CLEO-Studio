@@ -87,3 +87,9 @@ void ScriptEditor::highlightCurrentLine() {
 }
 QString ScriptEditor::filePath() const { return filePath_; }
 void ScriptEditor::setFilePath(const QString& path) { filePath_ = path; }
+QString ScriptEditor::encodingName() const { return encodingName_; }
+void ScriptEditor::setEncodingName(const QString& name) { encodingName_ = name; }
+bool ScriptEditor::hasByteOrderMark() const { return hasByteOrderMark_; }
+void ScriptEditor::setByteOrderMark(bool enabled) { hasByteOrderMark_ = enabled; }
+QString ScriptEditor::lineEnding() const { return lineEnding_; }
+void ScriptEditor::setLineEnding(const QString& ending) { lineEnding_ = ending; }
