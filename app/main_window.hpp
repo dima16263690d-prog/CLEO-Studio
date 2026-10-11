@@ -5,6 +5,7 @@ class QCloseEvent;
 class QDockWidget;
 class QLineEdit;
 class QPlainTextEdit;
+class QProcess;
 class QTabWidget;
 class QTableWidget;
 class QString;
@@ -22,6 +23,7 @@ private:
     QLineEdit* opcodeSearch_{nullptr};
     QTableWidget* opcodeTable_{nullptr};
     cleo_studio::OpcodeCatalog opcodeCatalog_;
+    QProcess* compilerProcess_{nullptr};
     [[nodiscard]] ScriptEditor* currentEditor() const;
     void newFile();
     void openFile();
@@ -36,4 +38,6 @@ private:
     void appendOutput(const QString& message);
     void loadOpcodeCatalog();
     void filterOpcodeTable(const QString& filter);
+    void configureGta3sc();
+    void compileWithGta3sc();
 };

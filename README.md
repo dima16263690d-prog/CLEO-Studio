@@ -16,6 +16,7 @@ The goal is a modern, testable alternative built around a modular language engin
 - SCM.INI-style opcode catalogue importer: retains opcode IDs, parameter counts, descriptions, and version metadata; detects malformed entries and warns on duplicate definitions.
 - Searchable opcode browser in the GUI. Double-clicking a row inserts its explicit opcode form (for example, `0001: `) into the editor.
 - CLI for script analysis and opcode-data inspection.
+- Experimental optional GTA3script backend integration using an externally installed `gta3sc.exe`; this is not a claim of full Sanny Builder dialect compatibility.
 - Automated Windows build, regression tests, and a packaged Windows x64 artifact in GitHub Actions.
 
 ## Run the Windows build
@@ -28,6 +29,7 @@ Download the artifact named **CLEO-Studio-Windows-x64** from the latest successf
 2. Press **F7** or choose **Проверка → Проверить структуру исходника** to run the current lexical and label analysis.
 3. Choose **Данные → Загрузить базу SCM.INI...** and select a compatible opcode database, such as `SASCM.INI`.
 4. Search the catalogue by opcode ID or description. Double-click an entry to insert its ID into the editor.
+5. For experimental `.sc` sources, configure `gta3sc.exe` under **Сборка** and use the experimental build command. This backend requires a compatible gta3sc installation and is not a general Sanny Builder compiler.
 
 The imported data set's version matters. A successful import does not guarantee the database matches the game/CLEO version being targeted.
 
@@ -63,7 +65,7 @@ ctest --test-dir build -C Release --output-on-failure
 1. **Language model:** parse statements, parameters, directives, expressions, and source spans.
 2. **Opcode integration:** use imported catalogues to improve navigation, command information, and safe diagnostics.
 3. **Editor productivity:** completion, signature help, jump-to-diagnostic, project/workspace settings.
-4. **Compiler backend:** select or implement a backend only after license and compatibility review; prove output compatibility with known-good binary fixtures.
+4. **Native compiler:** move beyond the optional gta3sc adapter only after defining the language subset and proving output compatibility with golden binary fixtures.
 5. **GTA/CLEO integration:** build profiles, target-version validation, and tests with real scripts.
 
 ## Engineering rules

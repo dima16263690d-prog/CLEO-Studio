@@ -15,6 +15,9 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPlainTextEdit>
+#include <QProcess>
+#include <QSettings>
+#include <QDir>
 #include <QSaveFile>
 #include <QStatusBar>
 #include <QTabWidget>
@@ -116,6 +119,12 @@ MainWindow::MainWindow(QWidget* parent)
     pasteAction->setShortcut(QKeySequence::Paste);
     connect(pasteAction, &QAction::triggered, this, [this] { if (auto* e = currentEditor()) e->paste(); });
 
+    auto* buildMenu = menuBar()->addMenu(tr("Сборка"));
+    auto* configureCompilerAction = buildMenu->addAction(tr("Указать путь к gta3sc.exe..."));
+    connect(configureCompilerAction, &QAction::triggered, this, [this] { configureGta3sc(); });
+    auto* compileAction = buildMenu->addAction(tr("Собрать CLEO через gta3sc (экспериментально)"));
+    connect(compileAction, &QAction::triggered, this, [this] { compileWithGta3sc(); });
+
     auto* dataMenu = menuBar()->addMenu(tr("Данные"));
     auto* loadOpcodesAction = dataMenu->addAction(tr("Загрузить базу SCM.INI..."));
     connect(loadOpcodesAction, &QAction::triggered, this, [this] { loadOpcodeCatalog(); });
@@ -167,7 +176,7 @@ void MainWindow::newFile() {
 
 void MainWindow::openFile() {
     const QString path = QFileDialog::getOpenFileName(this, tr("Открыть скрипт"), QString(),
-        tr("Скрипты GTA/CLEO (*.cs *.txt *.scm *.cleo);;Все файлы (*.*)"));
+        tr("Исходники и скрипты (*.sc *.cs *.txt *.scm *.cleo);;Все файлы (*.*)"));
     if (path.isEmpty()) return;
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
@@ -203,7 +212,7 @@ bool MainWindow::saveFileAs() {
     auto* editor = currentEditor();
     if (!editor) return false;
     const QString path = QFileDialog::getSaveFileName(this, tr("Сохранить скрипт"),
-        editor->filePath(), tr("Скрипты GTA/CLEO (*.cs *.txt);;Все файлы (*.*)"));
+        editor->filePath(), tr("Исходники GTA3script/Sanny (*.sc *.cs *.txt);;Все файлы (*.*)"));
     return path.isEmpty() ? false : writeFile(editor, path);
 }
 
@@ -326,6 +335,122 @@ void MainWindow::loadOpcodeCatalog() {
         : tr("Каталог опкодов загружен."), 6000);
 }
 
+void MainWindow::configureGta3sc() {
+    QSettings settings;
+    const QString currentPath = settings.value(QStringLiteral("compiler/gta3scPath")).toString();
+    const QString path = QFileDialog::getOpenFileName(
+        this, tr("Выбрать компилятор gta3sc"), currentPath,
+        tr("gta3sc executable (gta3sc.exe);;Программы (*.exe);;Все файлы (*.*)"));
+    if (path.isEmpty()) return;
+    settings.setValue(QStringLiteral("compiler/gta3scPath"), path);
+    appendOutput(tr("Внешний компилятор сохранён: %1").arg(path));
+    statusBar()->showMessage(tr("Путь к gta3sc сохранён."), 4000);
+}
+
+void MainWindow::compileWithGta3sc() {
+    if (compilerProcess_ && compilerProcess_->state() != QProcess::NotRunning) {
+        QMessageBox::information(this, tr("Сборка выполняется"),
+            tr("Дождитесь завершения текущей сборки."));
+        return;
+    }
+
+    auto* editor = currentEditor();
+    if (!editor) return;
+    if (editor->filePath().isEmpty() || editor->document()->isModified()) {
+        if (!saveFile()) return;
+    }
+
+    const QString sourcePath = editor->filePath();
+    if (QFileInfo(sourcePath).suffix().compare(QStringLiteral("sc"), Qt::CaseInsensitive) != 0) {
+        QMessageBox::warning(this, tr("Неподдерживаемый формат исходника"),
+            tr("Экспериментальный backend gta3sc здесь принимает исходники GTA3script с расширением .sc. "
+               "Это не означает полной совместимости со всеми возможностями языка Sanny Builder."));
+        return;
+    }
+
+    QSettings settings;
+    QString compilerPath = settings.value(QStringLiteral("compiler/gta3scPath")).toString();
+    if (compilerPath.isEmpty() || !QFileInfo::exists(compilerPath)) {
+        configureGta3sc();
+        compilerPath = settings.value(QStringLiteral("compiler/gta3scPath")).toString();
+    }
+    if (compilerPath.isEmpty() || !QFileInfo::exists(compilerPath)) {
+        appendOutput(tr("Сборка отменена: путь к gta3sc.exe не указан."));
+        return;
+    }
+
+    const QFileInfo sourceInfo(sourcePath);
+    const QString defaultOutput = QDir(sourceInfo.absolutePath()).filePath(
+        sourceInfo.completeBaseName() + QStringLiteral("_compiled.cs"));
+    const QString outputPath = QFileDialog::getSaveFileName(
+        this, tr("Куда сохранить CLEO-скрипт"), defaultOutput,
+        tr("CLEO scripts (*.cs);;Все файлы (*.*)"));
+    if (outputPath.isEmpty()) return;
+    if (QFileInfo(outputPath).absoluteFilePath() == QFileInfo(sourcePath).absoluteFilePath()) {
+        QMessageBox::warning(this, tr("Неверный путь"),
+            tr("Выходной файл не должен совпадать с исходником."));
+        return;
+    }
+
+    auto* process = new QProcess(this);
+    compilerProcess_ = process;
+    process->setProgram(compilerPath);
+    process->setWorkingDirectory(QFileInfo(compilerPath).absolutePath());
+    process->setArguments({
+        QStringLiteral("compile"),
+        QStringLiteral("--config=gtasa"),
+        QStringLiteral("--guesser"),
+        QStringLiteral("-fbreak-continue"),
+        QStringLiteral("-fcleo"),
+        QStringLiteral("--cs"),
+        QStringLiteral("-o"),
+        outputPath,
+        sourcePath
+    });
+
+    appendOutput(tr("Запуск gta3sc для %1").arg(QFileInfo(sourcePath).fileName()));
+    appendOutput(tr("Профиль: GTA San Andreas; вывод: %1").arg(outputPath));
+    outputDock_->show();
+    statusBar()->showMessage(tr("Компиляция через внешний gta3sc..."));
+
+    connect(process, &QProcess::readyReadStandardOutput, this, [this, process] {
+        const QString text = QString::fromLocal8Bit(process->readAllStandardOutput()).trimmed();
+        if (!text.isEmpty()) appendOutput(text);
+    });
+    connect(process, &QProcess::readyReadStandardError, this, [this, process] {
+        const QString text = QString::fromLocal8Bit(process->readAllStandardError()).trimmed();
+        if (!text.isEmpty()) appendOutput(text);
+    });
+    connect(process, &QProcess::errorOccurred, this, [this, process](QProcess::ProcessError error) {
+        if (error != QProcess::FailedToStart) return;
+        appendOutput(tr("Не удалось запустить gta3sc: %1").arg(process->errorString()));
+        statusBar()->showMessage(tr("Не удалось запустить внешний компилятор."), 6000);
+        if (compilerProcess_ == process) compilerProcess_ = nullptr;
+        process->deleteLater();
+    });
+    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
+        [this, process, outputPath](int exitCode, QProcess::ExitStatus exitStatus) {
+            const QString standardOut = QString::fromLocal8Bit(process->readAllStandardOutput()).trimmed();
+            const QString standardError = QString::fromLocal8Bit(process->readAllStandardError()).trimmed();
+            if (!standardOut.isEmpty()) appendOutput(standardOut);
+            if (!standardError.isEmpty()) appendOutput(standardError);
+
+            const bool succeeded = exitStatus == QProcess::NormalExit
+                && exitCode == 0 && QFileInfo::exists(outputPath);
+            if (succeeded) {
+                appendOutput(tr("Сборка завершена: %1").arg(outputPath));
+                statusBar()->showMessage(tr("CLEO-скрипт создан внешним компилятором."), 7000);
+            } else {
+                appendOutput(tr("Сборка не удалась (код выхода %1). Проверьте журнал и совместимость исходника.")
+                    .arg(exitCode));
+                statusBar()->showMessage(tr("Внешний компилятор завершился с ошибкой."), 7000);
+            }
+            if (compilerProcess_ == process) compilerProcess_ = nullptr;
+            process->deleteLater();
+        });
+    process->start();
+}
+
 void MainWindow::filterOpcodeTable(const QString& filter) {
     const QString query = filter.trimmed();
     for (int row = 0; row < opcodeTable_->rowCount(); ++row) {
@@ -361,6 +486,12 @@ void MainWindow::validateCurrent() {
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
+    if (compilerProcess_ && compilerProcess_->state() != QProcess::NotRunning) {
+        QMessageBox::information(this, tr("Сборка выполняется"),
+            tr("Дождитесь завершения внешнего компилятора перед выходом."));
+        event->ignore();
+        return;
+    }
     for (int i = 0; i < tabs_->count(); ++i) {
         auto* editor = static_cast<ScriptEditor*>(tabs_->widget(i));
         if (!maybeSave(editor)) { event->ignore(); return; }
