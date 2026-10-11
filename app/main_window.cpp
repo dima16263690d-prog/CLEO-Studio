@@ -2,6 +2,7 @@
 #include "cleo_studio/analyzer.hpp"
 #include "cleo_studio/opcode_catalog.hpp"
 #include "script_editor.hpp"
+#include <QAbstractItemView>
 #include <QAction>
 #include <QCloseEvent>
 #include <QDockWidget>
@@ -21,6 +22,9 @@
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QStringList>
+#include <string_view>
+#include <cstddef>
 #include <QTextCursor>
 #include <QTextDocument>
 
@@ -68,7 +72,7 @@ MainWindow::MainWindow(QWidget* parent)
             [this](int row, int) {
                 if (!currentEditor() || !opcodeTable_->item(row, 0)) return;
                 const auto id = opcodeTable_->item(row, 0)->data(Qt::UserRole).toUInt();
-                currentEditor()->insertPlainText(QStringLiteral("%1: ").arg(id, 4, 16, QChar('0')).toUpper());
+                currentEditor()->insertPlainText(QStringLiteral("%1: ").arg(static_cast<qulonglong>(id), 4, 16, QChar('0')).toUpper());
                 currentEditor()->setFocus();
             });
 
