@@ -46,15 +46,21 @@ cleo-studio-cli --version
 
 `validate` currently performs lexical checks and preliminary label analysis. It does not prove that commands, parameter types, control flow, or binary encoding are valid. `opcodes` checks and summarizes SCM.INI-style data; it does not generate bytecode.
 
-## Build from source
+## Build and open in Visual Studio 2022
 
-Requirements: CMake 3.24+, Visual Studio 2022 (Windows), and Qt 6.5+ with Widgets.
+This repository uses CMake as the single source of truth for target and source-file definitions. The setup script generates a native Visual Studio 2022 solution (CLEOStudio.sln) for the current machine; generated build files stay outside the source tree.
 
-```powershell
-cmake -S . -B build -DCMAKE_PREFIX_PATH="C:/Qt/6.x.x/msvc2022_64" -DBUILD_TESTING=ON
-cmake --build build --config Release
-ctest --test-dir build -C Release --output-on-failure
-```
+Requirements: Visual Studio 2022 with **Desktop development with C++** and CMake components, CMake 3.24+, and Qt 6.5+ Widgets for **MSVC 2022 x64**.
+
+From PowerShell in the repository root, run the setup script (adjust the Qt path to your installation):
+
+    .\scripts\configure-vs2022.ps1 -QtRoot "C:\Qt\6.8.3\msvc2022_64"
+
+Then open **out\build\vs2022-x64\CLEOStudio.sln** in Visual Studio 2022, select **Release | x64**, and build the solution. It contains the GUI app, CLI, core library, and tests. To run tests from PowerShell:
+
+    ctest --test-dir out/build/vs2022-x64 -C Release --output-on-failure
+
+The .vsconfig file at the repository root records the Visual Studio components needed for this workflow. See [Visual Studio 2022 setup](docs/VISUAL-STUDIO-2022.md) for troubleshooting and manual commands.
 
 ## Architecture
 
@@ -87,4 +93,19 @@ MIT. See [LICENSE](LICENSE).
 
 ## Русский
 
-CLEO Studio — открытая среда разработки скриптов GTA San Andreas/CLEO. Сейчас доступны Windows x64 редактор, вкладки, подсветка, анализатор меток, CLI и просмотрщик пользовательской базы `SASCM.INI`/SCM.INI. **Для совместимой компиляции CLEO под GTA San Andreas пока используется установленный `sanny.exe` как внешний backend.** Собственный компилятор ещё не реализован; `gta3sc` доступен отдельно как экспериментальный открытый backend.
+CLEO Studio — открытая среда разработки скриптов GTA San Andreas/CLEO. Сейчас доступны Windows x64 редактор, вкладки, подсветка, анализатор меток, CLI и просмотрщик пользовательской базы SASCM.INI/SCM.INI. **Для совместимой компиляции CLEO под GTA San Andreas пока используется установленный sanny.exe как внешний backend.** Собственный компилятор ещё не реализован; gta3sc доступен отдельно как экспериментальный открытый backend.
+
+### Сборка в Visual Studio 2022
+
+Проект использует CMake как единый источник описания исходников и целей сборки. Скрипт подготовки создаёт обычное решение Visual Studio 2022 CLEOStudio.sln для текущего компьютера — вручную поддерживать отдельные копии vcxproj не требуется.
+
+1. Установите Visual Studio 2022 с компонентами **Разработка классических приложений на C++** и CMake.
+2. Установите Qt 6.5+ для **MSVC 2022 64-bit** с компонентом Widgets.
+3. Откройте PowerShell в корне репозитория и выполните команду, указав свой путь к Qt:
+
+       .\scripts\configure-vs2022.ps1 -QtRoot "C:\Qt\6.8.3\msvc2022_64"
+
+4. Откройте out\build\vs2022-x64\CLEOStudio.sln в Visual Studio 2022.
+5. Выберите конфигурацию **Release | x64** и соберите решение. В него входят графическое приложение, CLI, библиотека ядра и тесты.
+
+Подробная инструкция и команды ручной настройки: [docs/VISUAL-STUDIO-2022.md](docs/VISUAL-STUDIO-2022.md). Файл .vsconfig в корне содержит список компонентов Visual Studio для этого проекта.
