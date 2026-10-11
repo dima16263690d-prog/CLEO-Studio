@@ -2,20 +2,46 @@
 
 **An open-source script development environment for GTA San Andreas and CLEO.**
 
-The goal is a modern, testable alternative built around a modular language engine, actionable diagnostics, automated tests, and reproducible builds.
+The goal is a modern, testable alternative built around a modular language engine, actionable diagnostics, versioned command data, automated tests, and reproducible builds.
 
-> **Development status: early foundation (0.1.0-dev).** This milestone provides a desktop source editor, lexical analysis, and preliminary label diagnostics. It does **not** compile source files into GTA SCM/CLEO bytecode and is not yet a replacement compiler.
+> **Development status: early foundation (0.1.0-dev).** The editor is an executable Windows application. Lexical and preliminary label diagnostics work; a user-supplied SCM.INI-style opcode catalogue can be browsed in the GUI and inspected with the CLI. This version does **not** compile source into GTA SCM/CLEO bytecode and is not yet a replacement compiler.
 
-## Current foundation
+## Current capabilities
 
-- Windows desktop application built with C++20 and Qt 6 Widgets.
-- Multiple source tabs, open/save/save-as, and dirty-file tracking.
-- Line numbers and syntax highlighting for common Sanny/CLEO source constructs.
-- Shared language core used by the GUI and CLI.
-- Diagnostics for unterminated strings/directives, duplicate labels, and possibly unresolved @label references.
-- Unit tests and a Windows GitHub Actions build/test workflow.
+- Windows x64 desktop application built with C++20 and Qt 6 Widgets.
+- Multiple source tabs, open/save/save-as, unsaved-change prompts, and atomic writes.
+- Line numbers, current-line highlight, and syntax highlighting for common Sanny/CLEO constructs.
+- Lexer diagnostics for unterminated string literals/directives and unrecognized characters.
+- Preliminary label analysis: duplicate labels are errors; unresolved `@label` references are warnings because labels may be external.
+- SCM.INI-style opcode catalogue importer: retains opcode IDs, parameter counts, descriptions, and version metadata; detects malformed entries and warns on duplicate definitions.
+- Searchable opcode browser in the GUI. Double-clicking a row inserts its explicit opcode form (for example, `0001: `) into the editor.
+- CLI for script analysis and opcode-data inspection.
+- Automated Windows build, regression tests, and a packaged Windows x64 artifact in GitHub Actions.
 
-## Build
+## Run the Windows build
+
+Download the artifact named **CLEO-Studio-Windows-x64** from the latest successful **Windows build** run under the repository's **Actions** tab. Extract the ZIP and launch `cleo-studio.exe`. The ZIP includes the Qt runtime libraries required by the editor.
+
+## Use the application
+
+1. Open or create a source file.
+2. Press **F7** or choose **Проверка → Проверить структуру исходника** to run the current lexical and label analysis.
+3. Choose **Данные → Загрузить базу SCM.INI...** and select a compatible opcode database, such as `SASCM.INI`.
+4. Search the catalogue by opcode ID or description. Double-click an entry to insert its ID into the editor.
+
+The imported data set's version matters. A successful import does not guarantee the database matches the game/CLEO version being targeted.
+
+## Command-line tools
+
+```powershell
+cleo-studio-cli validate path/to/script.cs
+cleo-studio-cli opcodes path/to/SASCM.INI
+cleo-studio-cli --version
+```
+
+`validate` currently performs lexical checks and preliminary label analysis. It does not prove that commands, parameter types, control flow, or binary encoding are valid. `opcodes` checks and summarizes SCM.INI-style data; it does not generate bytecode.
+
+## Build from source
 
 Requirements: CMake 3.24+, Visual Studio 2022 (Windows), and Qt 6.5+ with Widgets.
 
@@ -25,28 +51,20 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-Command-line analysis:
-
-```powershell
-cleo-studio-cli validate path/to/script.cs
-```
-
-Opcode import reads metadata and descriptions without bundling third-party tables. Analysis does not prove that commands, parameter types, control flow, or binary encoding are valid. Unresolved labels are warnings because some target formats may reference external labels.
-
 ## Architecture
 
-- `core/` — standalone C++20 lexer and lightweight analyzer; no Qt dependency.
-- `app/` — Qt editor, line-number gutter, highlighting, and diagnostics output.
+- `core/` — standalone C++20 lexer, label analyzer, opcode-catalogue parser, and diagnostics; no Qt dependency.
+- `app/` — Qt editor, line-number gutter, highlighting, opcode browser, and diagnostics panel.
 - `tests/` — core regression tests.
 - `data/` — reserved for versioned opcode metadata and import tooling.
 
 ## Roadmap
 
-1. Editor foundation and reliable diagnostics.
-2. Parser, symbol table, opcode/parameter model, source navigation.
-3. Versioned opcode metadata with documented provenance.
-4. SCM/CLEO compiler backend verified against golden bytecode fixtures.
-5. Build profiles, completion, signature help, and richer GTA integration.
+1. **Language model:** parse statements, parameters, directives, expressions, and source spans.
+2. **Opcode integration:** use imported catalogues to improve navigation, command information, and safe diagnostics.
+3. **Editor productivity:** completion, signature help, jump-to-diagnostic, project/workspace settings.
+4. **Compiler backend:** select or implement a backend only after license and compatibility review; prove output compatibility with known-good binary fixtures.
+5. **GTA/CLEO integration:** build profiles, target-version validation, and tests with real scripts.
 
 ## Engineering rules
 
@@ -54,7 +72,7 @@ Opcode import reads metadata and descriptions without bundling third-party table
 - Keep parser/compiler code independent from the UI.
 - Every language feature must have tests and known-good fixtures.
 - Do not claim binary compatibility until reproducible tests prove it.
-- Preserve licenses and attribution when integrating an existing project.
+- Preserve licenses and attribution when integrating existing projects or opcode data.
 
 ## License
 
@@ -64,4 +82,4 @@ MIT. See [LICENSE](LICENSE).
 
 ## Русский
 
-CLEO Studio — открытая среда разработки скриптов GTA San Andreas/CLEO. Сейчас в проекте есть базовый редактор, подсветка, лексический анализ и предварительные предупреждения о ссылках на метки. **Компиляция в SCM/CLEO-байткод ещё не реализована.** Сначала обеспечим правильность языка и диагностики, затем подключим или реализуем компилятор и подтвердим совместимость тестами на реальных скриптах.
+CLEO Studio — открытая среда разработки скриптов GTA San Andreas/CLEO. Сейчас доступны Windows x64 редактор, вкладки, подсветка, анализатор меток, CLI и просмотрщик пользовательской базы `SASCM.INI`/SCM.INI. **Компиляция в SCM/CLEO-байткод пока не реализована.** Следующий этап — полноценный парсер языка и диагностика на основе опкодов, затем совместимый компилятор, проверенный на реальных скриптах.
