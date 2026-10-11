@@ -25,6 +25,9 @@ int main() {
     const auto str = lex("show_text \"hello \\\"world\\\"\"");
     check(!str.hasErrors(), "escaped quotes in string should work");
     check(countKind(str, TokenKind::string) == 1, "recognizes string literal");
+    const auto gxt = lex("show_text_highpriority 'SUSPECT'");
+    check(!gxt.hasErrors(), "single-quoted GXT strings should be accepted");
+    check(countKind(gxt, TokenKind::string) == 1, "recognizes single-quoted string literals");
     const auto hex = lex("0A8C: read_memory 0x1234");
     check(!hex.hasErrors(), "opcode-like hex and hex number should work");
     check(countKind(hex, TokenKind::number) == 2, "recognizes opcode id and hex number");
