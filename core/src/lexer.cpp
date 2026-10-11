@@ -54,7 +54,8 @@ LexResult lex(std::string_view source) {
             if (!closed) addError("LEX002", "Unterminated compiler directive; expected '}'.", startLine, startColumn);
             continue;
         }
-        if (source[offset] == '"') {
+        if (source[offset] == '"' || source[offset] == '\'') {
+            const char quote = source[offset];
             advance();
             bool closed = false;
             while (offset < source.size()) {
@@ -65,7 +66,7 @@ LexResult lex(std::string_view source) {
                     if (offset < source.size() && source[offset] != '\n' && source[offset] != '\r') advance();
                     continue;
                 }
-                if (advance() == '"') { closed = true; break; }
+                if (advance() == quote) { closed = true; break; }
             }
             addToken(TokenKind::string, start, startLine, startColumn);
             if (!closed) addError("LEX001", "Unterminated string literal; expected a closing quote.", startLine, startColumn);
