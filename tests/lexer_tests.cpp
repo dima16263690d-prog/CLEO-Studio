@@ -1,5 +1,6 @@
 #include "cleo_studio/analyzer.hpp"
 #include "cleo_studio/lexer.hpp"
+#include "cleo_studio/opcode_catalog.hpp"
 #include <cstdlib>
 #include <iostream>
 #include <string_view>
@@ -39,6 +40,26 @@ int main() {
     check(badDirective.hasErrors() && !badDirective.diagnostics.empty()
           && badDirective.diagnostics.front().code == "LEX002", "reports unterminated directive");
     check(lex("0x wait 0").hasErrors(), "reports a hex prefix without digits");
+
+    const auto ini = parseOpcodeCatalog(
+        "; test opcode catalog\\n"
+        "VERSION=1.2\\n"
+        "PUBLISHER=unit tests\\n"
+        "DATE=2026-01-01\\n"
+        "0001=1, wait %1d% ms\\n"
+        "00BF=2, $hours $minutes\\n"
+        "0001=1, wait %1d% milliseconds\\n");
+    check(!ini.hasErrors(), "valid SCM.INI entries should parse");
+    check(ini.opcodes.size() == 2, "opcode catalogue has unique IDs");
+    check(ini.version == "1.2" && ini.publisher == "unit tests", "catalogue metadata is read");
+    check(ini.opcodes.at(0x0001).description == "wait %1d% milliseconds",
+          "later duplicate definitions replace earlier entries");
+    check(ini.duplicateDefinitions == 1, "duplicate opcode is counted");
+    check(!ini.diagnostics.empty() && ini.diagnostics.back().code == "OPC006",
+          "duplicate opcode emits a warning");
+
+    const auto brokenIni = parseOpcodeCatalog("0001=one, malformed\\n12345=1, bad-id");
+    check(brokenIni.hasErrors(), "malformed opcode definitions report errors");
 
     const auto resolved = analyze(R"(jump @START
 :START
