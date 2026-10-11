@@ -306,12 +306,60 @@ bool MainWindow::writeFile(ScriptEditor* editor, const QString& path) {
             tr("Не удалось записать файл:\n%1").arg(file.errorString()));
         return false;
     }
-    const QByteArray bytes = editor->toPlainText().toUtf8();
+
+    QString text = editor->toPlainText();
+    const QString ending = editor->lineEnding();
+    if (ending == QStringLiteral("\r\n")) {
+        text.replace(QStringLiteral("\n"), QStringLiteral("\r\n"));
+    } else if (ending == QStringLiteral("\r")) {
+        text.replace(QStringLiteral("\n"), QStringLiteral("\r"));
+    }
+
+    QByteArray bytes;
+    const QString encodingName = editor->encodingName();
+    if (encodingName == QStringLiteral("System ANSI")) {
+        bytes = text.toLocal8Bit();
+        if (QString::fromLocal8Bit(bytes) != text) {
+            QMessageBox::warning(this, tr("Потеря символов"),
+                tr("Текст содержит символы, недоступные в системной ANSI-кодировке. "
+                   "Выберите «Кодировка: преобразовать в UTF-8 без BOM» и повторите сохранение."));
+            return false;
+        }
+    } else {
+        const auto codec = QStringConverter::encodingForName(encodingName.toLatin1());
+        if (!codec) {
+            QMessageBox::critical(this, tr("Неизвестная кодировка"),
+                tr("Не удалось сохранить файл: кодировка %1 не поддерживается.").arg(encodingName));
+            return false;
+        }
+
+        QStringEncoder encoder(*codec);
+        bytes = encoder.encode(text);
+        if (encoder.hasError()) {
+            QMessageBox::warning(this, tr("Потеря символов"),
+                tr("В тексте есть символы, недоступные в кодировке %1. "
+                   "Выберите «Кодировка: преобразовать в UTF-8 без BOM» и повторите сохранение.")
+                    .arg(encodingName));
+            return false;
+        }
+    }
+
+    if (editor->hasByteOrderMark()) {
+        if (encodingName == QStringLiteral("UTF-8")) {
+            bytes.prepend(QByteArray::fromHex("efbbbf"));
+        } else if (encodingName == QStringLiteral("UTF-16LE")) {
+            bytes.prepend(QByteArray::fromHex("fffe"));
+        } else if (encodingName == QStringLiteral("UTF-16BE")) {
+            bytes.prepend(QByteArray::fromHex("feff"));
+        }
+    }
+
     if (file.write(bytes) != bytes.size() || !file.commit()) {
         QMessageBox::critical(this, tr("Ошибка записи"),
             tr("Не удалось завершить сохранение файла:\n%1").arg(file.errorString()));
         return false;
     }
+
     editor->setFilePath(path);
     editor->document()->setModified(false);
     updateTabTitle(editor);
@@ -356,8 +404,9 @@ void MainWindow::updateCursorStatus() {
     auto* editor = currentEditor();
     if (!editor) { statusBar()->showMessage(tr("Нет открытого документа")); return; }
     const QTextCursor cursor = editor->textCursor();
-    statusBar()->showMessage(tr("Строка %1, столбец %2")
-        .arg(cursor.blockNumber() + 1).arg(cursor.positionInBlock() + 1));
+    statusBar()->showMessage(tr("Строка %1, столбец %2 | %3")
+        .arg(cursor.blockNumber() + 1).arg(cursor.positionInBlock() + 1)
+        .arg(editor->encodingName()));
 }
 
 void MainWindow::appendOutput(const QString& message) {
