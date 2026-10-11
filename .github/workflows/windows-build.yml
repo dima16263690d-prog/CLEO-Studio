@@ -14,7 +14,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install Qt
-        uses: jurplep/install-qt-action@v4
+        uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.3'
           host: 'windows'
