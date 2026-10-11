@@ -17,7 +17,8 @@ The goal is a modern, testable alternative built around a modular language engin
 - SCM.INI-style opcode catalogue importer: retains opcode IDs, parameter counts, descriptions, and version metadata; detects malformed entries and warns on duplicate definitions.
 - Searchable opcode browser in the GUI. Double-clicking a row inserts its explicit opcode form (for example, `0001: `) into the editor.
 - CLI for script analysis and opcode-data inspection.
-- Experimental optional GTA3script backend integration using an externally installed `gta3sc.exe`; this is not a claim of full Sanny Builder dialect compatibility.
+- GTA San Andreas CLEO compilation through an installed Sanny Builder CLI (`sanny.exe --game sa --compile ...`), as a compatibility backend. Sanny Builder must be installed separately.
+- An additional experimental open-source `gta3sc.exe` backend for GTA3script `.sc` source files; it is not a full replacement for the Sanny Builder language.
 - Automated Windows build, regression tests, and a packaged Windows x64 artifact in GitHub Actions.
 
 ## Run the Windows build
@@ -30,7 +31,8 @@ Download the artifact named **CLEO-Studio-Windows-x64** from the latest successf
 2. Press **F7** or choose **Проверка → Проверить структуру исходника** to run the current lexical and label analysis.
 3. Choose **Данные → Загрузить базу SCM.INI...** and select a compatible opcode database, such as `SASCM.INI`.
 4. Search the catalogue by opcode ID or description. Double-click an entry to insert its ID into the editor.
-5. For experimental `.sc` sources, configure `gta3sc.exe` under **Сборка** and use the experimental build command. This backend requires a compatible gta3sc installation and is not a general Sanny Builder compiler.
+5. For normal CLEO scripts, save the source as `.txt` or `.sc`, include the `{$CLEO}` directive, configure `sanny.exe` under **Сборка**, then choose **Собрать CLEO для GTA San Andreas (Sanny CLI)**. Sanny Builder is an external compatibility compiler and is not bundled.
+6. The separate `gta3sc` command is experimental and is intended for GTA3script `.sc` sources.
 
 The imported data set's version matters. A successful import does not guarantee the database matches the game/CLEO version being targeted.
 
@@ -85,4 +87,4 @@ MIT. See [LICENSE](LICENSE).
 
 ## Русский
 
-CLEO Studio — открытая среда разработки скриптов GTA San Andreas/CLEO. Сейчас доступны Windows x64 редактор, вкладки, подсветка, анализатор меток, CLI и просмотрщик пользовательской базы `SASCM.INI`/SCM.INI. **Компиляция в SCM/CLEO-байткод пока не реализована.** Следующий этап — полноценный парсер языка и диагностика на основе опкодов, затем совместимый компилятор, проверенный на реальных скриптах.
+CLEO Studio — открытая среда разработки скриптов GTA San Andreas/CLEO. Сейчас доступны Windows x64 редактор, вкладки, подсветка, анализатор меток, CLI и просмотрщик пользовательской базы `SASCM.INI`/SCM.INI. **Для совместимой компиляции CLEO под GTA San Andreas пока используется установленный `sanny.exe` как внешний backend.** Собственный компилятор ещё не реализован; `gta3sc` доступен отдельно как экспериментальный открытый backend.

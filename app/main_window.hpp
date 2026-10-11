@@ -38,6 +38,8 @@ private:
     void appendOutput(const QString& message);
     void loadOpcodeCatalog();
     void filterOpcodeTable(const QString& filter);
+    void configureSannyBuilder();
+    void compileWithSannyBuilder();
     void configureGta3sc();
     void compileWithGta3sc();
 };

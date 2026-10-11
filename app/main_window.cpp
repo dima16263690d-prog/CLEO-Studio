@@ -9,6 +9,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QCoreApplication>
 #include <QInputDialog>
 #include <QStringConverter>
 #include <QHeaderView>
@@ -133,6 +134,11 @@ MainWindow::MainWindow(QWidget* parent)
     connect(pasteAction, &QAction::triggered, this, [this] { if (auto* e = currentEditor()) e->paste(); });
 
     auto* buildMenu = menuBar()->addMenu(tr("Сборка"));
+    auto* configureSannyAction = buildMenu->addAction(tr("Указать путь к sanny.exe..."));
+    connect(configureSannyAction, &QAction::triggered, this, [this] { configureSannyBuilder(); });
+    auto* compileSannyAction = buildMenu->addAction(tr("Собрать CLEO для GTA San Andreas (Sanny CLI)"));
+    connect(compileSannyAction, &QAction::triggered, this, [this] { compileWithSannyBuilder(); });
+    buildMenu->addSeparator();
     auto* configureCompilerAction = buildMenu->addAction(tr("Указать путь к gta3sc.exe..."));
     connect(configureCompilerAction, &QAction::triggered, this, [this] { configureGta3sc(); });
     auto* compileAction = buildMenu->addAction(tr("Собрать CLEO через gta3sc (экспериментально)"));
@@ -484,6 +490,158 @@ void MainWindow::loadOpcodeCatalog() {
     statusBar()->showMessage(opcodeCatalog_.hasErrors()
         ? tr("Каталог загружен частично: есть ошибки в определениях.")
         : tr("Каталог опкодов загружен."), 6000);
+}
+
+void MainWindow::configureSannyBuilder() {
+    QSettings settings;
+    const QString currentPath = settings.value(QStringLiteral("compiler/sannyBuilderPath")).toString();
+    const QString path = QFileDialog::getOpenFileName(
+        this, tr("Выбрать Sanny Builder для совместимой компиляции GTA SA"), currentPath,
+        tr("Sanny Builder (sanny.exe);;Программы (*.exe);;Все файлы (*.*)"));
+    if (path.isEmpty()) return;
+    settings.setValue(QStringLiteral("compiler/sannyBuilderPath"), path);
+    appendOutput(tr("Компилятор совместимости для GTA SA сохранён: %1").arg(path));
+    statusBar()->showMessage(tr("Путь к sanny.exe сохранён."), 4000);
+}
+
+void MainWindow::compileWithSannyBuilder() {
+    if (compilerProcess_ && compilerProcess_->state() != QProcess::NotRunning) {
+        QMessageBox::information(this, tr("Сборка выполняется"),
+            tr("Дождитесь завершения текущей сборки."));
+        return;
+    }
+
+    auto* editor = currentEditor();
+    if (!editor) return;
+    if (editor->filePath().isEmpty() || editor->document()->isModified()) {
+        if (!saveFile()) return;
+    }
+
+    const QString sourcePath = editor->filePath();
+    const QString sourceExtension = QFileInfo(sourcePath).suffix().toLower();
+    if (sourceExtension != QStringLiteral("txt") && sourceExtension != QStringLiteral("sc")) {
+        QMessageBox::warning(this, tr("Неподдерживаемый формат исходника"),
+            tr("Для сборки CLEO через Sanny Builder сохраните исходный текст как .txt или .sc. "
+               "Скомпилированные .cs-файлы не принимаются как исходник."));
+        return;
+    }
+
+    const QString sourceText = editor->toPlainText().toUpper();
+    if (!sourceText.contains(QStringLiteral("{$CLEO}"))
+        && !sourceText.contains(QStringLiteral("{$CLEO "))
+        && !sourceText.contains(QStringLiteral("{$CLEO\t"))) {
+        QMessageBox::warning(this, tr("Это не CLEO-исходник"),
+            tr("Для этой команды исходник должен содержать директиву {$CLEO}. "
+               "Так Sanny Builder создаст CLEO-скрипт, а не основной SCM."));
+        return;
+    }
+
+    QSettings settings;
+    QString compilerPath = settings.value(QStringLiteral("compiler/sannyBuilderPath")).toString();
+    if (compilerPath.isEmpty() || !QFileInfo::exists(compilerPath)) {
+        configureSannyBuilder();
+        compilerPath = settings.value(QStringLiteral("compiler/sannyBuilderPath")).toString();
+    }
+    if (compilerPath.isEmpty() || !QFileInfo::exists(compilerPath)) {
+        appendOutput(tr("Сборка отменена: путь к sanny.exe не указан."));
+        return;
+    }
+
+    const QFileInfo sourceInfo(sourcePath);
+    const QString defaultOutput = QDir(sourceInfo.absolutePath()).filePath(
+        sourceInfo.completeBaseName() + QStringLiteral("_compiled.cs"));
+    const QString outputPath = QFileDialog::getSaveFileName(
+        this, tr("Куда сохранить CLEO-скрипт для GTA SA"), defaultOutput,
+        tr("CLEO scripts (*.cs);;Все файлы (*.*)"));
+    if (outputPath.isEmpty()) return;
+    if (QFileInfo(outputPath).absoluteFilePath() == QFileInfo(sourcePath).absoluteFilePath()) {
+        QMessageBox::warning(this, tr("Неверный путь"),
+            tr("Выходной файл не должен совпадать с исходником."));
+        return;
+    }
+
+    const QString temporaryOutputPath = outputPath + QStringLiteral(".tmp.%1.cs")
+        .arg(QCoreApplication::applicationPid());
+    if (QFileInfo::exists(temporaryOutputPath) && !QFile::remove(temporaryOutputPath)) {
+        QMessageBox::critical(this, tr("Ошибка временного файла"),
+            tr("Не удалось убрать старый временный результат:\n%1").arg(temporaryOutputPath));
+        return;
+    }
+
+    auto* process = new QProcess(this);
+    compilerProcess_ = process;
+    process->setProgram(compilerPath);
+    process->setWorkingDirectory(QFileInfo(compilerPath).absolutePath());
+    process->setArguments({
+        QStringLiteral("--game"), QStringLiteral("sa"),
+        QStringLiteral("--no-splash"),
+        QStringLiteral("--compile"), sourcePath, temporaryOutputPath
+    });
+
+    appendOutput(tr("Компиляция CLEO для GTA San Andreas: %1")
+        .arg(QFileInfo(sourcePath).fileName()));
+    appendOutput(tr("Профиль игры: GTA SA; выходной файл: %1").arg(outputPath));
+    appendOutput(tr("Backend совместимости: установленный Sanny Builder CLI."));
+    outputDock_->show();
+    statusBar()->showMessage(tr("Компиляция CLEO для GTA San Andreas..."));
+
+    connect(process, &QProcess::readyReadStandardOutput, this, [this, process] {
+        const QString text = QString::fromLocal8Bit(process->readAllStandardOutput()).trimmed();
+        if (!text.isEmpty()) appendOutput(text);
+    });
+    connect(process, &QProcess::readyReadStandardError, this, [this, process] {
+        const QString text = QString::fromLocal8Bit(process->readAllStandardError()).trimmed();
+        if (!text.isEmpty()) appendOutput(text);
+    });
+    connect(process, &QProcess::errorOccurred, this, [this, process, temporaryOutputPath](QProcess::ProcessError error) {
+        if (error != QProcess::FailedToStart) return;
+        appendOutput(tr("Не удалось запустить sanny.exe: %1").arg(process->errorString()));
+        QFile::remove(temporaryOutputPath);
+        statusBar()->showMessage(tr("Не удалось запустить Sanny Builder CLI."), 6000);
+        if (compilerProcess_ == process) compilerProcess_ = nullptr;
+        process->deleteLater();
+    });
+    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
+        [this, process, temporaryOutputPath, outputPath](int exitCode, QProcess::ExitStatus exitStatus) {
+            const QString standardOut = QString::fromLocal8Bit(process->readAllStandardOutput()).trimmed();
+            const QString standardError = QString::fromLocal8Bit(process->readAllStandardError()).trimmed();
+            if (!standardOut.isEmpty()) appendOutput(standardOut);
+            if (!standardError.isEmpty()) appendOutput(standardError);
+
+            bool succeeded = exitStatus == QProcess::NormalExit
+                && exitCode == 0 && QFileInfo::exists(temporaryOutputPath);
+            if (succeeded) {
+                QFile temporary(temporaryOutputPath);
+                QSaveFile destination(outputPath);
+                if (!temporary.open(QIODevice::ReadOnly) || !destination.open(QIODevice::WriteOnly)) {
+                    succeeded = false;
+                    appendOutput(tr("Не удалось открыть временный результат или выходной файл."));
+                    destination.cancelWriting();
+                } else {
+                    const QByteArray compiledBytes = temporary.readAll();
+                    if (destination.write(compiledBytes) != compiledBytes.size() || !destination.commit()) {
+                        succeeded = false;
+                        appendOutput(tr("Не удалось сохранить скомпилированный CLEO-скрипт: %1")
+                            .arg(destination.errorString()));
+                        destination.cancelWriting();
+                    }
+                    temporary.close();
+                }
+            }
+
+            QFile::remove(temporaryOutputPath);
+            if (succeeded) {
+                appendOutput(tr("Готово: CLEO-скрипт для GTA SA сохранён в %1").arg(outputPath));
+                statusBar()->showMessage(tr("CLEO-скрипт для GTA San Andreas создан."), 7000);
+            } else {
+                appendOutput(tr("Компиляция GTA SA не удалась (код выхода %1). Исходник сохранён без изменений.")
+                    .arg(exitCode));
+                statusBar()->showMessage(tr("Компиляция CLEO для GTA SA завершилась ошибкой."), 7000);
+            }
+            if (compilerProcess_ == process) compilerProcess_ = nullptr;
+            process->deleteLater();
+        });
+    process->start();
 }
 
 void MainWindow::configureGta3sc() {
