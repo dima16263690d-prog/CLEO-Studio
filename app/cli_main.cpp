@@ -1,4 +1,4 @@
-#include "cleo_studio/lexer.hpp"
+#include "cleo_studio/analyzer.hpp"
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -6,7 +6,7 @@
 namespace {
 const char* severityName(cleo_studio::Severity s) { return s == cleo_studio::Severity::error ? "error" : "warning"; }
 void printUsage() {
-    std::cerr << "CLEO Studio CLI 0.1.0-dev\nUsage:\n  cleo-studio-cli validate <script-file>\n  cleo-studio-cli --version\n\nNote: validate checks lexical structure only; it does not compile bytecode.\n";
+    std::cerr << "CLEO Studio CLI 0.1.0-dev\nUsage:\n  cleo-studio-cli validate <script-file>\n  cleo-studio-cli --version\n\nNote: validate does not compile SCM/CLEO bytecode.\n";
 }
 }
 int main(int argc, char** argv) {
@@ -18,15 +18,15 @@ int main(int argc, char** argv) {
     std::ifstream input(path, std::ios::binary);
     if (!input) { std::cerr << "error: cannot open file: " << path << '\n'; return 2; }
     const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-    const auto result = cleo_studio::lex(source);
+    const auto result = cleo_studio::analyze(source);
+    std::size_t errors = 0, warnings = 0;
     for (const auto& d : result.diagnostics) {
+        if (d.severity == cleo_studio::Severity::error) ++errors; else ++warnings;
         std::cerr << path << ':' << d.line << ':' << d.column << ": " << severityName(d.severity)
                   << " [" << d.code << "]: " << d.message << '\n';
     }
-    if (result.hasErrors()) {
-        std::cerr << "Lexical validation failed with " << result.diagnostics.size() << " diagnostic(s).\n";
-        return 1;
-    }
-    std::cout << "Lexical validation passed: " << result.tokens.size() << " token(s).\nNo SCM/CLEO bytecode was generated.\n";
-    return 0;
+    std::cout << "Analysis completed: " << result.tokens.size() << " token(s), "
+              << errors << " error(s), " << warnings << " warning(s).\n"
+              << "No SCM/CLEO bytecode was generated.\n";
+    return result.hasErrors() ? 1 : 0;
 }

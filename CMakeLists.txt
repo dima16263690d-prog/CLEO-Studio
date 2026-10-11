@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 include(CTest)
 
-add_library(cleo_core core/src/lexer.cpp)
+add_library(cleo_core core/src/lexer.cpp core/src/analyzer.cpp)
 target_include_directories(cleo_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/core/include")
 target_compile_features(cleo_core PUBLIC cxx_std_20)
 if(MSVC)

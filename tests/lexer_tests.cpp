@@ -1,3 +1,4 @@
+#include "cleo_studio/analyzer.hpp"
 #include "cleo_studio/lexer.hpp"
 #include <cstdlib>
 #include <iostream>
@@ -38,6 +39,18 @@ int main() {
     check(badDirective.hasErrors() && !badDirective.diagnostics.empty()
           && badDirective.diagnostics.front().code == "LEX002", "reports unterminated directive");
     check(lex("0x wait 0").hasErrors(), "reports a hex prefix without digits");
+
+    const auto resolved = analyze("jump @START\\n:START\\nwait 0");
+    check(!resolved.hasErrors(), "a forward label reference should resolve");
+    check(resolved.diagnostics.empty(), "a declared target label should not produce diagnostics");
+    const auto duplicate = analyze(":MAIN\\n:main");
+    check(duplicate.hasErrors(), "duplicate labels are errors, case-insensitively");
+    check(!duplicate.diagnostics.empty() && duplicate.diagnostics.front().code == "SEM001",
+          "duplicate label diagnostic uses SEM001");
+    const auto unresolved = analyze("jump @MISSING");
+    check(!unresolved.hasErrors() && !unresolved.diagnostics.empty()
+          && unresolved.diagnostics.front().code == "SEM002",
+          "unresolved label references are warnings, not errors");
     if (failures != 0) { std::cerr << failures << " test assertion(s) failed.\n"; return EXIT_FAILURE; }
     std::cout << "All CLEO Studio lexer tests passed.\n";
     return EXIT_SUCCESS;

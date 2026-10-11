@@ -1,5 +1,5 @@
 #include "main_window.hpp"
-#include "cleo_studio/lexer.hpp"
+#include "cleo_studio/analyzer.hpp"
 #include "script_editor.hpp"
 #include <QAction>
 #include <QCloseEvent>
@@ -231,7 +231,7 @@ void MainWindow::validateCurrent() {
     auto* editor = currentEditor();
     if (!editor) return;
     output_->clear();
-    const auto result = cleo_studio::lex(editor->toPlainText().toUtf8().toStdString());
+    const auto result = cleo_studio::analyze(editor->toPlainText().toUtf8().toStdString());
     const QString fileName = editor->filePath().isEmpty() ? tr("Без имени") : QFileInfo(editor->filePath()).fileName();
     for (const auto& d : result.diagnostics) {
         const QString severity = d.severity == cleo_studio::Severity::error ? tr("ошибка") : tr("предупреждение");
@@ -240,12 +240,12 @@ void MainWindow::validateCurrent() {
             .arg(QString::fromStdString(d.code)).arg(QString::fromStdString(d.message)));
     }
     if (result.diagnostics.empty())
-        appendOutput(tr("Лексическая проверка пройдена. Токенов: %1.").arg(result.tokens.size()));
+        appendOutput(tr("Анализ исходника пройден. Токенов: %1.").arg(result.tokens.size()));
     else
         appendOutput(tr("Диагностик: %1.").arg(result.diagnostics.size()));
-    appendOutput(tr("Внимание: байткод SCM/CLEO не создавался; проверка синтаксиса пока неполная."));
+    appendOutput(tr("Внимание: байткод SCM/CLEO не создавался; синтаксис и типы параметров проверяются не полностью."));
     statusBar()->showMessage(result.hasErrors() ? tr("Проверка завершена: обнаружены ошибки.")
-                                                : tr("Лексическая проверка завершена."), 6000);
+                                                : tr("Анализ исходника завершён."), 6000);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
