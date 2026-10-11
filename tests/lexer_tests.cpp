@@ -40,10 +40,13 @@ int main() {
           && badDirective.diagnostics.front().code == "LEX002", "reports unterminated directive");
     check(lex("0x wait 0").hasErrors(), "reports a hex prefix without digits");
 
-    const auto resolved = analyze("jump @START\\n:START\\nwait 0");
+    const auto resolved = analyze(R"(jump @START
+:START
+wait 0)");
     check(!resolved.hasErrors(), "a forward label reference should resolve");
     check(resolved.diagnostics.empty(), "a declared target label should not produce diagnostics");
-    const auto duplicate = analyze(":MAIN\\n:main");
+    const auto duplicate = analyze(R"(:MAIN
+:main)");
     check(duplicate.hasErrors(), "duplicate labels are errors, case-insensitively");
     check(!duplicate.diagnostics.empty() && duplicate.diagnostics.front().code == "SEM001",
           "duplicate label diagnostic uses SEM001");
