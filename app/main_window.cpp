@@ -342,7 +342,7 @@ void MainWindow::validateCurrent() {
     auto* editor = currentEditor();
     if (!editor) return;
     output_->clear();
-    const auto result = cleo_studio::analyze(editor->toPlainText().toUtf8().toStdString());
+    const auto result = cleo_studio::analyze(editor->toPlainText().toUtf8().toStdString(),\n        opcodeCatalog_.opcodes.empty() ? nullptr : &opcodeCatalog_);
     const QString fileName = editor->filePath().isEmpty() ? tr("Без имени") : QFileInfo(editor->filePath()).fileName();
     for (const auto& d : result.diagnostics) {
         const QString severity = d.severity == cleo_studio::Severity::error ? tr("ошибка") : tr("предупреждение");

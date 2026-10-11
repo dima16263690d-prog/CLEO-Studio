@@ -77,6 +77,19 @@ wait 0)");
     check(!unresolved.hasErrors() && !unresolved.diagnostics.empty()
           && unresolved.diagnostics.front().code == "SEM002",
           "unresolved label references are warnings, not errors");
+
+    const auto opcodeData = parseOpcodeCatalog(R"INI(0001=1, wait %1d% ms
+0018=1, condition
+)INI");
+    const auto knownOpcodes = analyze(R"INI(0001: wait 0
+8018: condition 1
+)INI", &opcodeData);
+    check(knownOpcodes.diagnostics.empty(),
+          "known opcode IDs and 0x8000-negated conditional IDs are accepted");
+    const auto unknownOpcode = analyze("0FFF: custom_command", &opcodeData);
+    check(!unknownOpcode.hasErrors() && !unknownOpcode.diagnostics.empty()
+          && unknownOpcode.diagnostics.front().code == "SEM003",
+          "opcode IDs absent from the loaded catalogue produce a warning");
     if (failures != 0) { std::cerr << failures << " test assertion(s) failed.\n"; return EXIT_FAILURE; }
     std::cout << "All CLEO Studio lexer tests passed.\n";
     return EXIT_SUCCESS;
