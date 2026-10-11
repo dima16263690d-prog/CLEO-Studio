@@ -31,7 +31,7 @@ Command-line analysis:
 cleo-studio-cli validate path/to/script.cs
 ```
 
-Analysis does not prove that commands, parameter types, control flow, or binary encoding are valid. Unresolved labels are warnings because some target formats may reference external labels.
+Opcode import reads metadata and descriptions without bundling third-party tables. Analysis does not prove that commands, parameter types, control flow, or binary encoding are valid. Unresolved labels are warnings because some target formats may reference external labels.
 
 ## Architecture
 
